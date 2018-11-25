@@ -1,0 +1,363 @@
+---
+title: "Gender analysis and comparison between Simons Genome Diversity Project and 1000 Genomes Project"
+date: "November, 24, 2018"
+output:
+  html_document:
+    highlight: textmate
+    theme: spacelab
+    toc: yes
+    df_print: paged
+  html_notebook: default
+---
+
+<hr />
+
+## Part 1: Connect to Google BigQuery
+- Connect to Google BigQuery using R package *bigrquery*
+- After authenticating, connect to *bigquery-public-data*  to get *human_genome_variants* datasets
+- Datasets that will be used are: *simons_genome_diversity_project_sample_metadata* and *1000_genomes_sample_info*
+
+#### Load Packages
+```{r setup, warning=FALSE, message=FALSE}
+# Load packages
+library(bigrquery) 
+library(DBI)
+library(dplyr)
+library(readr)
+library(ggplot2)
+library(gridExtra)
+```
+
+### Set up BigQuery connection with DBI
+- Use Project ID as the billing project when working with free sample data
+- Load Google Cloud Platform Project ID from a separate file for protection
+
+```{r}
+# Get project ID from a file or assign directly to billing 
+project_id <- read_file(file="project_ID.txt")
+billing <- project_id
+
+# Set up BigQuery connection with DBI
+con <- DBI::dbConnect(
+  bigrquery::bigquery(),
+  project = "bigquery-public-data",
+  dataset = "human_genome_variants",
+  billing = billing
+)
+```
+
+#### List available datasets
+```{r}
+dbListTables(con)
+```
+
+### Connect to *simons_genome_diversity_project_sample_metadata*
+- Convert to a local tibble
+- Select columns for use
+```{r, warning=FALSE, message=FALSE}
+simmons_metadata <- tbl(con, "simons_genome_diversity_project_sample_metadata")
+
+# Convert to a local tibble
+simons_data <- simmons_metadata %>%
+  as_tibble() %>%
+  select(Region, Country, Gender) 
+
+simons_data
+```
+
+### Connect to *1000_genomes_sample_info*
+- Convert to a local tibble
+- Select columns for use and rename 
+```{r, warning=FALSE, message=FALSE}
+k_metadata <- tbl(con, "1000_genomes_sample_info")
+
+# Convert to a local tibble
+k_data <- k_metadata %>%
+  as_tibble() %>%
+  select(Super_Population_Description, Population_Description, Gender) %>% 
+  rename(Region = Super_Population_Description,
+         Country = Population_Description)
+
+k_data
+```
+
+<hr />
+
+## Part 2: Total Gender Ratio
+- Compare gender distribution between two projects
+- Plot results using *ggplot2*
+
+### Simons Project Gender Ratio
+```{r, warning=FALSE}
+# Look at the Gender ratio
+simons_total_gender_ratio <- simons_data %>%
+  group_by(Gender) %>%
+  summarize(Count = n()) %>%
+  mutate(Percentage = round(Count/sum(Count)*100))
+simons_total_gender_ratio
+```
+
+#### Plot Simons Total Gender Ratio
+```{r, warning=FALSE}
+simons_total_ratio_plot <- simons_data %>%
+  ggplot() +
+  geom_bar(aes(x = Gender, fill = Gender)) +
+  geom_text(data = simons_total_gender_ratio, 
+            aes(x = Gender, y = Count, label = Count), 
+            position = position_dodge(width=0.9), 
+            vjust=-0.25, 
+            fontface = "bold", size=3) +
+  geom_label(data = simons_total_gender_ratio, 
+             aes(x = Gender, y = Percentage, label = paste0(Percentage, "%"), group = Gender), 
+             position = position_stack(vjust = 1)) +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5, size=18, color = "#054354")) +
+  ggtitle("Simons Project Gender Ratio") +
+  scale_x_discrete(name= "Gender") +
+  scale_y_continuous(name = "Count") +
+  scale_fill_discrete(name = "Gender", labels = c("Female", "Male"))
+
+simons_total_ratio_plot 
+```
+
+### 1000 Genome Project Gender Ratio
+```{r, warning=FALSE}
+# Look at the Gender ratio
+K_total_gender_ratio <- k_data %>%
+  group_by(Gender) %>%
+  summarize(Count = n()) %>%
+  mutate(Percentage = round(Count/sum(Count)*100))
+K_total_gender_ratio 
+```
+
+#### Plot 1000 Genome Total Gender Ratio
+```{r, warning=FALSE}
+k_total_ratio_plot <- k_data %>%
+  ggplot() +
+  geom_bar(aes(x = Gender, fill = Gender)) +
+  geom_text(data = K_total_gender_ratio, 
+            aes(x = Gender, y = Count, label = Count), 
+            position = position_dodge(width=0.9), 
+            vjust=-0.25, 
+            fontface = "bold", size=3) +
+  geom_label(data = K_total_gender_ratio, 
+             aes(x = Gender, y = Percentage, label = paste0(Percentage, "%"), group = Gender), 
+             position = position_stack(vjust = 15)) +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5, size=18, color = "#054354")) +
+  ggtitle("1000 Genome Project Gender Ratio") +
+  scale_x_discrete(name= "Gender") +
+  scale_y_continuous(name = "Count") +
+  scale_fill_discrete(name = "Gender", labels = c("Female", "Male"))
+
+k_total_ratio_plot
+```
+
+### Compare Total Gender Ratio:
+```{r, warning=FALSE}
+# Arrange two plots together
+grid.arrange(simons_total_ratio_plot, k_total_ratio_plot, nrow = 2)
+```
+
+
+<hr />
+
+## Part 3: Gender Ratio by Region
+- Look at number of people from each Region
+- Look at the Gender ratio for each Region
+
+### Simons Project Region Gender Ratio
+#### Look at number of people from each Region
+```{r, warning=FALSE}
+simons_region_people <- simons_data %>%
+  group_by(Region) %>%
+  summarize(Count = n())
+simons_region_people
+```
+
+#### Look at the Gender ratio for each Region by percentage
+```{r, warning=FALSE}
+simons_region_gender_ratio <- simons_data %>%
+  group_by(Region, Gender) %>%
+  summarize(Count = n()) %>%
+  mutate(Percentage = round(Count/sum(Count)*100))
+simons_region_gender_ratio
+```
+
+#### Plot Simons Region Gender Ratio
+```{r, warning=FALSE}
+simons_region_plot <- simons_data %>%
+  ggplot() +
+  geom_bar(aes(x = Region, fill = Gender)) +
+  geom_text(data = simons_region_people, 
+            aes(x = Region, y = Count, label = Count), 
+            position = position_dodge(width=0.9), 
+            vjust=-0.25, 
+            fontface = "bold", size=3) +
+  geom_label(data = simons_region_gender_ratio, 
+             aes(x = Region, y = Count, label = paste0(Percentage, "%"), group = Gender), 
+             position = position_stack(vjust = 0.5)) +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5, size=18, color = "#054354")) +
+  ggtitle("Simons Project Gender Ratio by Region") +
+  scale_x_discrete(name= "Region") +
+  scale_y_continuous(name = "Count") +
+  scale_fill_discrete(name = "Gender", labels = c("Female", "Male"))
+
+simons_region_plot
+```
+
+### 1000 Genome Project Region Gender Ratio
+#### Look at number of people from each Region
+```{r, warning=FALSE}
+k_region_people <- k_data %>%
+  group_by(Region) %>%
+  summarize(Count = n())
+k_region_people
+```
+
+#### Look at the Gender ratio for each Region by percentage
+```{r, warning=FALSE}
+k_region_gender_ratio <- k_data %>%
+  group_by(Region, Gender) %>%
+  summarize(Count = n()) %>%
+  mutate(Percentage = round(Count/sum(Count)*100))
+k_region_gender_ratio
+```
+
+#### Plot 1000 Genome Region Gender Ratio
+```{r, warning=FALSE}
+k_region_plot <- k_data %>%
+  ggplot() +
+  geom_bar(aes(x = Region, fill = Gender)) +
+  geom_text(data = k_region_people, 
+            aes(x = Region, y = Count, label = Count), 
+            position = position_dodge(width=0.9), 
+            vjust=-0.25, 
+            fontface = "bold", size=3) +
+  geom_label(data = k_region_gender_ratio, 
+             aes(x = Region, y = Count, label = paste0(Percentage, "%"), group = Gender), 
+             position = position_stack(vjust = 0.5)) +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5, size=18, color = "#054354")) +
+  ggtitle("1000 Genome Project Gender Ratio by Region") +
+  scale_x_discrete(name= "Region") +
+  scale_y_continuous(name = "Count") +
+  scale_fill_discrete(name = "Gender", labels = c("Female", "Male"))
+
+k_region_plot
+```
+
+
+### Compare Region Gender Ratio:
+```{r, warning=FALSE}
+# Arrange two plots together
+grid.arrange(simons_region_plot, k_region_plot, nrow = 2)
+```
+
+<hr />
+
+## Part 4: Gender Ratio by Country
+- Look at number of people from each Country
+- Look at the Gender ratio for each Country
+
+### Simons Project Country Gender Ratio
+#### Look at number of people from each Country
+```{r, warning=FALSE}
+simons_country_people <- simons_data %>%
+  group_by(Country) %>%
+  summarize(Count = n())
+simons_country_people
+```
+
+#### Look at the Gender ratio for each Country by percentage
+```{r, warning=FALSE}
+simons_country_gender_ratio <- simons_data %>%
+  group_by(Country, Gender) %>%
+  summarize(Count = n()) %>%
+  mutate(Percentage = round(Count/sum(Count)*100))
+simons_country_gender_ratio
+```
+
+#### Plot Simons Country Gender Ratio
+```{r, warning=FALSE}
+simons_country_plot <- simons_data %>%
+  ggplot() +
+  geom_bar(aes(x = Country, fill = Gender)) +
+  geom_text(data = simons_country_people, 
+            aes(x = Country, y = Count, label = Count), 
+            position = position_dodge(width=0.9), 
+            vjust=-0.25, 
+            fontface = "bold", size=3) +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5, size=18, color = "#054354"),
+        axis.text.x = element_text(angle = 90, vjust = 0.3, hjust=1, size=8)) +
+  ggtitle("Simons Gender Ratio by Country") +
+  scale_x_discrete(name= "Country") +
+  scale_y_continuous(name = "Count", breaks= seq(0,50,by=5)) +
+  scale_fill_discrete(name = "Gender", labels = c("Female", "Male"))
+
+simons_country_plot
+```
+
+### 1000 Genome Project Country Gender Ratio
+#### Look at number of people from each Country
+```{r, warning=FALSE}
+k_country_people <- k_data %>%
+  group_by(Country) %>%
+  summarize(Count = n())
+k_country_people
+```
+
+#### Look at the Gender ratio for each Country by percentage
+```{r, warning=FALSE}
+k_country_gender_ratio <- k_data %>%
+  group_by(Country, Gender) %>%
+  summarize(Count = n()) %>%
+  mutate(Percentage = round(Count/sum(Count)*100))
+k_country_gender_ratio
+```
+
+#### Plot 1000 Genome Country Gender Ratio
+```{r, warning=FALSE}
+k_country_plot <- k_data %>%
+  ggplot() +
+  geom_bar(aes(x = Country, fill = Gender)) +
+  geom_text(data = k_country_people, 
+            aes(x = Country, y = Count, label = Count), 
+            position = position_dodge(width=0.9), 
+            vjust=-0.25, 
+            fontface = "bold", size=3) +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5, size=18, color = "#054354"),
+        axis.text.x = element_text(angle = 60, vjust = 1, hjust=1, size=8)) +
+  ggtitle("1000 Genome Project Gender Ratio by Country") +
+  scale_x_discrete(name= "Country") +
+  scale_y_continuous(name = "Count") +
+  scale_fill_discrete(name = "Gender", labels = c("Female", "Male"))
+
+k_country_plot
+```
+
+<hr />
+
+## Part 5: Simons Project Countries with Only One Represented Gender
+- Look at the countries that only have one gender represented in Simons Genome Project
+
+```{r}
+simons_one_gender_country <- simons_data %>%
+  group_by(Country, Gender) %>%
+  summarise(Count = n()) %>%
+  mutate(Percentage = round(Count/sum(Count)*100)) %>%
+  filter(Percentage == 100) 
+
+simons_one_gender_country %>%
+  select(Country, Gender, Count)
+```
+
+<hr />
+
+## Part 6: Conclusion
+The Simons Genome Diversity Projects represents higher human diversity compared to 1000 Genomes Project, by sequencing individuals from 142 populations compared to 26 populations.  There is however a bigger difference between gender representations when comparing the two projects.  The total gender ratio for 1000 Genomes Project is almost equal at 50% and similar when looking closely separated by Regions and even Countries.  The Simons Project contains more males sequences than female sequences at 64% to 36% respectively.  The difference is even bigger when looking at different Regions and Countries, with some countries only representing one gender.  There are 31 countries that only have one gender represented in the Simons Genome Diversity Project  
+
+<hr />
