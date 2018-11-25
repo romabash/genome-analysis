@@ -30,14 +30,11 @@ dbListTables(con)
 sample_metadata <- tbl(con, "simons_genome_diversity_project_sample_metadata")
 
 # Convert to a tibble to use locally
-data <- as_tibble(sample_metadata)
+df <- as_tibble(sample_metadata)
 
 # Select the columns and mutate some of them into factors
-data <- data %>%
-  select(Region, Country, Population_ID, Gender, Coverage) %>% 
-  rename(Population=Population_ID) %>%
-  mutate(Gender = factor(Gender), 
-         Region = factor(Region))
+data <- df %>%
+  select(Region, Country, Gender) 
 
 #--------------------
 # Look at overall Gender ratio
@@ -48,6 +45,7 @@ overall_gender_ratio <- data %>%
   group_by(Gender) %>%
   summarize(Count = n()) %>%
   mutate(Percentage = round(Count/sum(Count)*100))
+overall_gender_ratio
 
 # Plot Gender Ratio Information
 data %>%
@@ -60,10 +58,10 @@ data %>%
             fontface = "bold") +
   geom_label(data = overall_gender_ratio, 
              aes(x = Gender, y = Percentage, label = paste0(Percentage, "%"), group = Gender), 
-             position = position_stack(vjust = 0.5)) +
+             position = position_stack(vjust = 1)) +
   theme_bw() +
   theme(plot.title = element_text(hjust = 0.5, size=18, color = "#054354")) +
-  ggtitle("Simons Gender Ratio") +
+  ggtitle("Simons Project Gender Ratio") +
   scale_x_discrete(name= "Gender") +
   scale_y_continuous(name = "Count") +
   scale_fill_discrete(name = "Gender", labels = c("Female", "Male"))
@@ -76,12 +74,14 @@ data %>%
 region_people <- data %>%
   group_by(Region) %>%
   summarize(Count = n())
+region_people
 
 # Look at the Gender ratio for each Region
 region_gender_ratio <- data %>%
   group_by(Region, Gender) %>%
   summarize(Count = n()) %>%
   mutate(Percentage = round(Count/sum(Count)*100))
+region_gender_ratio
 
 # Plot People and Gender Ratio Information
 data %>%
@@ -97,7 +97,7 @@ data %>%
              position = position_stack(vjust = 0.5)) +
   theme_bw() +
   theme(plot.title = element_text(hjust = 0.5, size=18, color = "#054354")) +
-  ggtitle("Simons Gender Ratio") +
+  ggtitle("Simons Project Gender Ratio") +
   scale_x_discrete(name= "Region") +
   scale_y_continuous(name = "Count") +
   scale_fill_discrete(name = "Gender", labels = c("Female", "Male"))
@@ -111,12 +111,14 @@ data %>%
 country_people <- data %>%
   group_by(Country) %>%
   summarize(Count = n())
+country_people
 
 # Look at the Gender ratio for each Country
 country_gender_ratio <- data %>%
   group_by(Country, Gender) %>%
   summarize(Count = n()) %>%
   mutate(Percentage = round(Count/sum(Count)*100))
+country_gender_ratio
 
 # Plot People and Gender Ratio Information
 data %>%
@@ -126,14 +128,62 @@ data %>%
             aes(x = Country, y = Count, label = Count), 
             position = position_dodge(width=0.9), 
             vjust=-0.25, 
-            fontface = "bold") +
+            fontface = "bold", size=3) +
   theme_bw() +
   theme(plot.title = element_text(hjust = 0.5, size=18, color = "#054354"),
         axis.text.x = element_text(angle = 90, vjust = 0.3, hjust=1)) +
   ggtitle("Simons Gender Ratio") +
   scale_x_discrete(name= "Country") +
-  scale_y_continuous(name = "Count") +
+  scale_y_continuous(name = "Count", breaks= seq(0,50,by=5)) +
   scale_fill_discrete(name = "Gender", labels = c("Female", "Male"))
 
+
+#--------------------
+# Look at Countries where only one Gender is represented
+#--------------------
+
+one_gender_country <- data %>%
+  group_by(Country, Gender) %>%
+  summarise(Count = n()) %>%
+  mutate(Percentage = round(Count/sum(Count)*100)) %>%
+  filter(Percentage == 100) 
+
+one_gender_country %>%
+  select(Country) %>%
+  print(n = nrow(.))
+
+#--------------------
+# Map the Countries where only one Gender is represented
+#--------------------
+
+# Get world map without Antarctica
+world_data <- map_data('world')
+world_data <- world_data %>% 
+  as_tibble() %>%
+  filter(region != "Antarctica")
+
+# fortify turns a map into a data frame that can more easily be plotted with ggplot2
+world_data <- fortify(world_data)
+world_data %>%
+  select(region) %>%
+  distinct() %>%
+  print(n = nrow(.))
+
+ggplot() +
+  geom_map(data=world_data, map=world_data,
+                  aes(x=long, y=lat, group=group, map_id=region),
+                  fill="white", colour="#7f7f7f", size=0.5) +
+  geom_map(data=one_gender_country, map=world_data,
+                  aes(fill=Gender, map_id=Country),
+                  colour="#7f7f7f", size=0.5) +
+  coord_map("rectangular", lat0=0, xlim=c(-180,180), ylim=c(-60, 90)) +
+  scale_y_continuous(breaks=c()) +
+  scale_x_continuous(breaks=c()) +
+  labs(fill="Gender", title="Countries with Only One Gender Represented", x="", y="") +
+  theme_bw() +
+  theme(panel.border = element_blank())
+
+#--------------------
 # R session information
+#--------------------
 sessionInfo()
