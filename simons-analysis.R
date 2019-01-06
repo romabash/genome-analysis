@@ -23,7 +23,8 @@ con <- DBI::dbConnect(
   dataset = "human_genome_variants",
   billing = billing
 )
-con
+
+# List datasets
 dbListTables(con)
 
 # Connect to "simons_genome_diversity_project_sample_metadata"
@@ -149,7 +150,7 @@ one_gender_country <- data %>%
   filter(Percentage == 100) 
 
 one_gender_country %>%
-  select(Country) %>%
+  select(Country, Gender, Count) %>%
   print(n = nrow(.))
 
 #--------------------
