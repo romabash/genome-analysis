@@ -2,11 +2,11 @@
 title: "Gender analysis and comparison between Simons Genome Diversity Project and 1000 Genomes Project"
 date: "November, 24, 2018"
 output:
-  html_document:
-    highlight: textmate
-    theme: spacelab
+  github_document:
     toc: yes
     df_print: paged
+    fig_width: 5
+    fig_height: 5
   html_notebook: default
 ---
 
